@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>EventMaster - Gestão Profissional de Eventos</title>
+    
+    <!-- Bibliotecas Externas (CDNs) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js" type="module"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js" type="module"></script>
+    <script src="https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js" type="module"></script>
+    
+    <style>
+        :root { --primary: #6366f1; --dark: #0f172a; }
+        .hidden { display: none !important; }
+        .bg-glass { background: rgba(255, 255, 255, 0.9); backdrop-filter: blur(10px); }
+        .active-tab { border-bottom: 4px solid var(--primary); color: var(--primary); font-weight: bold; }
+        
+        /* Estilos do Calendário */
+        .calendar-grid { display: grid; grid-template-columns: repeat(7, 1fr); gap: 1px; background: #e2e8f0; border-radius: 12px; overflow: hidden; }
+        .calendar-day { background: white; min-height: 100px; padding: 8px; transition: background 0.2s; }
+        .calendar-day.today { background: #eef2ff; }
+        .event-dot { width: 100%; font-size: 9px; padding: 2px 4px; border-radius: 4px; margin-top: 2px; font-weight: bold; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        
+        /* Cores de Status */
+        .status-confirmado { background: #dcfce7; color: #166534; }
+        .status-pendente { background: #fef3c7; color: #92400e; }
+        
+        /* PIN Pad UI */
+        .pin-dot { width: 12px; height: 12px; border-radius: 50%; border: 2px solid var(--primary); transition: all 0.2s; }
+        .pin-dot.filled { background: var(--primary); transform: scale(1.2); }
+        .num-btn { width: 70px; height: 70px; display: flex; align-items: center; justify-content: center; border-radius: 50%; background: #f3f4f6; font-weight: bold; font-size: 1.5rem; cursor: pointer; transition: all 0.1s; }
+        .num-btn:active { background: #e5e7eb; transform: scale(0.95); }
+    </style>
+</head>
+<body class="bg-slate-50 min-h-screen font-sans text-slate-900">
+
+    <!-- TELA DE LOGIN (Página de Rosto) -->
+    <div id="login-overlay" class="fixed inset-0 bg-slate-900 z-[100] flex flex-col items-center justify-center p-6 text-white overflow-y-auto">
+        <div class="text-center mb-12">
+            <h1 class="text-5xl font-black tracking-tighter uppercase">Event<span class="text-indigo-500">Master</span></h1>
+            <p class="text-slate-400 text-sm tracking-[0.3em] uppercase mt-2">Professional Music Management</p>
+        </div>
+        
+        <!-- Passo 1: Seleção de Perfil -->
+        <div id="login-step-1" class="grid grid-cols-1 md:grid-cols-2 gap-6 w-full max-w-4xl">
+            <button onclick="showPinLogin()" class="group bg-white/5 border border-white/10 hover:border-indigo-500 hover:bg-white/10 p-10 rounded-[3rem] transition-all flex flex-col items-center text-center">
+                <div class="w-20 h-20 bg-indigo-500/20 rounded-full flex items-center justify-center text-4xl mb-6 transition group-hover:scale-110">🛡️</div>
+                <h2 class="text-2xl font-bold mb-2">Admin / Equipe</h2>
+                <p class="text-slate-400 text-sm">Gestão de agenda, contratos e logística da equipe.</p>
+                <div class="mt-8 px-6 py-2 border border-indigo-500/50 rounded-full text-indigo-400 text-xs font-bold uppercase tracking-widest">Acesso com PIN</div>
+            </button>
+
+            <button onclick="accessAsGuest()" class="group bg-indigo-600 hover:bg-indigo-700 p-10 rounded-[3rem] transition-all flex flex-col items-center text-center shadow-2xl shadow-indigo-500/20">
+                <div class="w-20 h-20 bg-white/20 rounded-full flex items-center justify-center text-4xl mb-6 transition group-hover:scale-110">🥂</div>
+                <h2 class="text-2xl font-bold mb-2">Convidado / Cliente</h2>
+                <p class="text-indigo-100 text-sm">Acesse as informações do seu evento e contrato.</p>
+                <div class="mt-8 px-6 py-2 bg-white text-indigo-600 rounded-full text-xs font-bold uppercase tracking-widest">Entrar no Portal</div>
+            </button>
+        </div>
+
+        <!-- Passo 2: Teclado PIN -->
+        <div id="pin-screen" class="bg-white text-slate-800 p-8 rounded-[3rem] shadow-2xl w-full max-w-sm hidden flex flex-col items-center">
+            <button onclick="backToStep1()" class="self-start text-xs font-bold text-slate-400 uppercase mb-4 hover:text-indigo-600">← Voltar</button>
+            <h2 class="text-xl font-bold mb-8">Digite o PIN de Equipe</h2>
+            <div class="flex space-x-4 mb-10">
+                <div id="dot-0" class="pin-dot"></div><div id="dot-1" class="pin-dot"></div><div id="dot-2" class="pin-dot"></div><div id="dot-3" class="pin-dot"></div>
+            </div>
+            <div class="grid grid-cols-3 gap-4">
+                <button onclick="pressNum(1)" class="num-btn">1</button><button onclick="pressNum(2)" class="num-btn">2</button><button onclick="pressNum(3)" class="num-btn">3</button>
+                <button onclick="pressNum(4)" class="num-btn">4</button><button onclick="pressNum(5)" class="num-btn">5</button><button onclick="pressNum(6)" class="num-btn">6</button>
+                <button onclick="pressNum(7)" class="num-btn">7</button><button onclick="pressNum(8)" class="num-btn">8</button><button onclick="pressNum(9)" class="num-btn">9</button>
+                <div class="w-16 h-16"></div><button onclick="pressNum(0)" class="num-btn">0</button>
+                <button onclick="clearPin()" class="num-btn text-red-500 text-[10px] font-black uppercase">Limpar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CONTEÚDO PRINCIPAL (APP) -->
+    <div id="app-content" class="hidden">
+        <nav class="bg-glass shadow-sm sticky top-0 z-50 border-b border-slate-200">
+            <div class="max-w-7xl mx-auto px-4 flex justify-between items-center h-16">
+                <span class="text-xl font-black text-slate-800 uppercase tracking-tighter">Event<span class="text-indigo-600">Master</span></span>
+                <div class="flex items-center space-x-4">
+                    <span id="role-badge" class="px-3 py-1 rounded-full text-[10px] font-black uppercase bg-indigo-100 text-indigo-700"></span>
+                    <button onclick="logout()" class="text-slate-400 hover:text-red-500 font-bold text-xs uppercase transition-colors">Sair</button>
+                </div>
+            </div>
+            <div id="nav-tabs" class="max-w-7xl mx-auto px-4 flex space-x-6 overflow-x-auto text-sm no-scrollbar border-t border-gray-100"></div>
+        </nav>
+
+        <main class="max-w-7xl mx-auto p-4 md:p-8">
+            <!-- Visão Admin: Agenda -->
+            <section id="view-agenda" class="view-section hidden">
+                <div class="flex flex-col md:flex-row justify-between items-center mb-8 gap-4">
+                    <h2 class="text-2xl font-black text-slate-800">Agenda de Shows</h2>
+                    <button onclick="openModal('modal-evento')" class="bg-indigo-600 text-white px-6 py-3 rounded-2xl font-black shadow-lg hover:bg-indigo-700 transition">Agendar Novo</button>
+                </div>
+                <div class="bg-white p-2 rounded-[2.5rem] shadow-sm border border-slate-100">
+                    <div class="calendar-grid" id="calendar-container"></div>
+                </div>
+            </section>
+
+            <!-- Visão Cliente: Portal -->
+            <section id="view-portal" class="view-section hidden">
+                <h2 class="text-3xl font-black text-slate-800 mb-8">Meu Evento</h2>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm flex flex-col justify-between min-h-[250px]">
+                        <div>
+                            <span class="text-[10px] font-black uppercase text-indigo-500 tracking-widest">Documentação</span>
+                            <h3 class="text-2xl font-black text-slate-800 mt-2">Contrato Digital</h3>
+                            <p class="text-slate-500 text-sm mt-2">Acesse a via PDF do seu contrato de prestação de serviços.</p>
+                        </div>
+                        <a id="client-contract-link" href="#" target="_blank" class="mt-6 inline-flex items-center justify-center bg-slate-900 text-white py-4 rounded-2xl font-bold hover:bg-slate-800 transition">📄 Abrir PDF</a>
+                    </div>
+                    <div class="bg-white p-8 rounded-[2.5rem] border border-slate-100 shadow-sm min-h-[250px]">
+                        <span class="text-[10px] font-black uppercase text-emerald-500 tracking-widest">Pagamentos</span>
+                        <h3 class="text-2xl font-black text-slate-800 mt-2">Status Financeiro</h3>
+                        <div class="mt-6 p-5 bg-emerald-50 rounded-2xl border border-emerald-100 flex items-center justify-between">
+                            <span class="font-bold text-emerald-800">Reserva Confirmada</span>
+                            <span class="bg-emerald-500 text-white p-1 rounded-full text-xs">✓</span>
+                        </div>
+                    </div>
+                </div>
+            </section>
+        </main>
+    </div>
+
+    <!-- MODAL: NOVO EVENTO -->
+    <div id="modal-evento" class="fixed inset-0 bg-slate-900/60 hidden flex items-center justify-center p-4 z-[110] backdrop-blur-sm">
+        <div class="bg-white rounded-[2.5rem] w-full max-w-lg p-8 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <h3 class="text-2xl font-black mb-6 text-slate-800">Novo Agendamento</h3>
+            <form id="form-evento" class="space-y-4">
+                <input type="text" id="ev-nome" placeholder="Título do Show" class="w-full bg-slate-50 p-4 rounded-2xl border border-slate-100 focus:ring-2 ring-indigo-500 outline-none" required>
+                <div class="grid grid-cols-2 gap-4">
+                    <input type="date" id="ev-data" class="w-full bg-slate-50 p-4 rounded-2xl border border-slate-100 focus:ring-2 ring-indigo-500 outline-none" required>
+                    <input type="time" id="ev-hora" class="w-full bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                </div>
+                <input type="text" id="ev-local" placeholder="Local/Cidade" class="w-full bg-slate-50 p-4 rounded-2xl border border-slate-100 focus:ring-2 ring-indigo-500 outline-none">
+                <input type="url" id="ev-contrato" placeholder="URL do PDF do Contrato" class="w-full bg-slate-50 p-4 rounded-2xl border border-slate-100">
+                <select id="ev-status" class="w-full bg-slate-50 p-4 rounded-2xl border border-slate-100 font-bold">
+                    <option value="confirmado">Confirmado</option>
+                    <option value="pendente">Pendente</option>
+                </select>
+                <div class="flex justify-end gap-3 pt-4">
+                    <button type="button" onclick="closeModal('modal-evento')" class="px-4 py-2 font-bold text-slate-400">Cancelar</button>
+                    <button type="submit" class="bg-indigo-600 text-white px-8 py-3 rounded-2xl font-black shadow-lg">Salvar Evento</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- LÓGICA CORE -->
+    <script type="module">
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getAuth, signInAnonymously, onAuthStateChanged, signOut } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+
+        // Configuração do Firebase
+        const firebaseConfig = JSON.parse(window.__firebase_config || '{}');
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+        const db = getFirestore(app);
+        const appId = typeof window.__app_id !== 'undefined' ? window.__app_id : 'event-master-pro';
+
+        let currentRole = localStorage.getItem('last_role') || "guest";
+        let currentPinInput = "";
+        let eventsData = [];
+
+        // --- AUTH & LOGIN ---
+        window.accessAsGuest = async () => { 
+            currentRole = "guest"; 
+            localStorage.setItem('last_role', "guest"); 
+            await signInAnonymously(auth); 
+        };
+
+        window.showPinLogin = () => { 
+            document.getElementById('login-step-1').classList.add('hidden'); 
+            document.getElementById('pin-screen').classList.remove('hidden'); 
+            currentPinInput = ""; 
+            updatePinDots(); 
+        };
+
+        window.backToStep1 = () => {
+            document.getElementById('pin-screen').classList.add('hidden'); 
+            document.getElementById('login-step-1').classList.remove('hidden'); 
+        };
+
+        window.pressNum = (n) => { 
+            if(currentPinInput.length < 4) { 
+                currentPinInput += n; 
+                updatePinDots(); 
+                if(currentPinInput.length === 4) validatePin(); 
+            }
+        };
+
+        window.clearPin = () => { currentPinInput = ""; updatePinDots(); };
+
+        function updatePinDots() { 
+            for(let i=0; i<4; i++) {
+                document.getElementById(`dot-${i}`).classList[i < currentPinInput.length ? 'add' : 'remove']('filled');
+            }
+        }
+
+        async function validatePin() {
+            if(currentPinInput === "3161") {
+                currentRole = "admin"; 
+                localStorage.setItem('last_role', "admin"); 
+                await signInAnonymously(auth);
+            } else { 
+                alert("PIN Inválido"); 
+                clearPin(); 
+            }
+        }
+
+        onAuthStateChanged(auth, (user) => {
+            if (user) {
+                document.getElementById('login-overlay').classList.add('hidden');
+                document.getElementById('app-content').classList.remove('hidden');
+                setupAppUI(currentRole);
+                loadRealtimeData();
+            }
+        });
+
+        window.logout = () => { 
+            signOut(auth); 
+            localStorage.removeItem('last_role'); 
+            location.reload(); 
+        };
+
+        // --- INTERFACE ---
+        function setupAppUI(role) {
+            const tabs = document.getElementById('nav-tabs');
+            const badge = document.getElementById('role-badge');
+            tabs.innerHTML = '';
+            
+            const schema = {
+                admin: { label: 'Admin / Equipe', menu: ['Agenda', 'Equipe'], start: 'agenda' },
+                guest: { label: 'Portal Cliente', menu: ['Portal'], start: 'portal' }
+            }[role];
+
+            badge.innerText = schema.label;
+            schema.menu.forEach(item => {
+                const id = item.toLowerCase();
+                const btn = document.createElement('button');
+                btn.innerText = item;
+                btn.className = `tab-btn py-4 px-2 text-slate-400 font-bold transition-all border-b-2 border-transparent`;
+                btn.onclick = () => {
+                    document.querySelectorAll('.view-section').forEach(v => v.classList.add('hidden'));
+                    document.getElementById(`view-${id}`).classList.remove('hidden');
+                    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active-tab', 'text-indigo-600'));
+                    btn.classList.add('active-tab', 'text-indigo-600');
+                };
+                tabs.appendChild(btn);
+                if(id === schema.start) btn.click();
+            });
+        }
+
+        function buildCalendar() {
+            const container = document.getElementById('calendar-container');
+            container.innerHTML = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'].map(d => `<div class="bg-slate-50 text-center p-2 text-[10px] font-black uppercase text-slate-400">${d}</div>`).join('');
+            
+            const date = new Date();
+            const first = new Date(date.getFullYear(), date.getMonth(), 1).getDay();
+            const total = new Date(date.getFullYear(), date.getMonth() + 1, 0).getDate();
+
+            for(let i=0; i<first; i++) container.innerHTML += '<div class="calendar-day bg-slate-50/50"></div>';
+            for(let d=1; d<=total; d++) {
+                const dayStr = `${date.getFullYear()}-${String(date.getMonth()+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+                const daily = eventsData.filter(e => e.data === dayStr);
+                let html = `<div class="calendar-day border-t border-slate-100 ${d===date.getDate()?'today':''}">
+                    <span class="text-[10px] font-bold text-slate-400">${d}</span>`;
+                daily.forEach(e => html += `<div class="event-dot status-${e.status}">${e.nome}</div>`);
+                html += `</div>`;
+                container.innerHTML += html;
+            }
+        }
+
+        function loadRealtimeData() {
+            onSnapshot(collection(db, 'artifacts', appId, 'public', 'data', 'eventos'), (snap) => {
+                eventsData = snap.docs.map(d => ({id: d.id, ...d.data()}));
+                if(currentRole === 'admin') buildCalendar();
+                if(currentRole === 'guest' && eventsData.length > 0) {
+                    const pdfLink = document.getElementById('client-contract-link');
+                    const myEvent = eventsData[0]; // Simplificação: pega o primeiro evento
+                    if(myEvent.contrato) pdfLink.href = myEvent.contrato;
+                }
+            }, (err) => console.error("Erro Firestore:", err));
+        }
+
+        document.getElementById('form-evento').onsubmit = async (e) => {
+            e.preventDefault();
+            const payload = {
+                nome: document.getElementById('ev-nome').value,
+                data: document.getElementById('ev-data').value,
+                hora: document.getElementById('ev-hora').value,
+                local: document.getElementById('ev-local').value,
+                contrato: document.getElementById('ev-contrato').value,
+                status: document.getElementById('ev-status').value,
+                createdAt: serverTimestamp()
+            };
+            try {
+                await addDoc(collection(db, 'artifacts', appId, 'public', 'data', 'eventos'), payload);
+                closeModal('modal-evento');
+                e.target.reset();
+            } catch (err) { alert("Erro ao salvar. Verifique permissões."); }
+        };
+
+        window.openModal = (id) => document.getElementById(id).classList.remove('hidden');
+        window.closeModal = (id) => document.getElementById(id).classList.add('hidden');
+    </script>
+</body>
+</html>
