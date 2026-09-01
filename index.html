@@ -158,15 +158,14 @@
         import { getFirestore, collection, addDoc, onSnapshot, serverTimestamp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
 
         // Configuração do Firebase
-        const firebaseConfig = JSON.parse(window.__firebase_config || '{}');
-        const app = initializeApp(firebaseConfig);
-        const auth = getAuth(app);
-        const db = getFirestore(app);
-        const appId = typeof window.__app_id !== 'undefined' ? window.__app_id : 'event-master-pro';
-
-        let currentRole = localStorage.getItem('last_role') || "guest";
-        let currentPinInput = "";
-        let eventsData = [];
+       apiKey: "AIzaSyA_NdDzA1CHWYme7l9twpjrMQRM8XP8FBI",
+  authDomain: "eventmaster-pro-9b542.firebaseapp.com",
+  projectId: "eventmaster-pro-9b542",
+  storageBucket: "eventmaster-pro-9b542.firebasestorage.app",
+  messagingSenderId: "130587412681",
+  appId: "1:130587412681:web:38012930fef27674fea518",
+  measurementId: "G-E6BYKPD59K"
+};
 
         // --- AUTH & LOGIN ---
         window.accessAsGuest = async () => { 
